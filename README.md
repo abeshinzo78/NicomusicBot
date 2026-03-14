@@ -21,6 +21,53 @@
 
 ---
 
+## 技術仕様
+
+### 使用ライブラリ
+
+| ライブラリ | バージョン | 用途 |
+|---|---|---|
+| discord.py | 2.3.0 以上 | Discord Bot フレームワーク |
+| yt-dlp | 2024.1.0 以上 | ニコニコ動画の情報取得・音声抽出 |
+| PyNaCl | 1.5.0 以上 | 音声暗号化（discord.py の音声機能に必須） |
+| python-dotenv | 1.0.0 以上 | `.env` ファイルの読み込み |
+| FFmpeg | システム依存 | 音声デコード・ストリーミング |
+
+### アーキテクチャ
+
+```
+!play URL
+  └─ fetch_entries()        yt-dlp subprocess で動画情報を取得（--flat-playlist）
+       └─ asyncio.Queue     エントリを軽量化（4フィールドのみ）してキューに積む
+            └─ play_next()  キューから1件取り出し
+                 └─ yt-dlp subprocess  音声を stdout にパイプ出力
+                      └─ FFmpegPCMAudio(pipe=True)  Discord VC にストリーミング
+```
+
+### メモリ最適化の仕組み
+
+- **yt-dlp をモジュールとしてインポートしない** — subprocess 経由で呼び出すことで、yt-dlp のモジュール常駐（約 20MB）を回避
+- **エントリの軽量化** — yt-dlp が返す巨大な dict から `id` / `title` / `webpage_url` / `url` の4フィールドのみを保持
+- **ストリーミング再生** — 音声をディスクに保存せず yt-dlp → FFmpeg へ直接パイプするため、ファイルキャッシュが発生しない
+- **停止時にメモリ解放** — `!stop` および自動退出時に yt-dlp プロセスを強制終了し、`gc.collect()` でガベージコレクションを実行
+- **パッケージの遅延インストール** — 未導入時のみ pip を実行し、再起動のたびに pip が走るコストを排除
+
+### 対応 URL
+
+| 種別 | URL 形式 |
+|---|---|
+| 単体動画 | `https://www.nicovideo.jp/watch/smXXXXXXXX` |
+| マイリスト | `https://www.nicovideo.jp/mylist/XXXXXXXX` |
+| シリーズ | `https://www.nicovideo.jp/series/XXXXXXXX` |
+
+### エラーハンドリング
+
+- 削除済み・視聴制限動画 → 自動スキップしてキューを継続
+- VC 接続失敗 → 3秒間隔で最大3回リトライ
+- URL 解決失敗 → ユーザーにメッセージを送信してスキップ
+
+---
+
 ## セットアップ
 
 ### 1. Discord Bot の作成
@@ -101,6 +148,7 @@ NICONICO_PASS=ニコニコのパスワード
 ```
 
 現在再生中の曲と、次に再生される曲の一覧を表示します。
+タイトルをクリックするとニコニコ動画のページに飛べます。
 
 **表示例:**
 ```
@@ -123,6 +171,10 @@ NICONICO_PASS=ニコニコのパスワード
 再生を停止し、キューをクリアして Bot がボイスチャンネルから退出します。
 
 ---
+
+# LICENCE
+
+Unlicense license　なんで自由に改造して遊んでください。インターネットは自由な空間です。
 
 ## 注意事項
 
