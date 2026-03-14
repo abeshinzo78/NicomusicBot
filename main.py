@@ -232,7 +232,9 @@ async def cmd_queue(ctx: commands.Context):
     if items:
         lines.append(f"\n📋 キュー ({len(items)} 件):")
         for i, entry in enumerate(items[:10], 1):
-            lines.append(f"  {i}. {entry.get('title', entry.get('id', '不明'))}")
+            t = entry.get("title") or entry.get("id") or "不明"
+            u = make_video_url(entry)
+            lines.append(f"  {i}. [{t}]({u})" if u else f"  {i}. {t}")
         if len(items) > 10:
             lines.append(f"  … 他 {len(items) - 10} 件")
     else:
