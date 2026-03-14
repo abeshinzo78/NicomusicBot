@@ -149,7 +149,7 @@ async def play_next(state: GuildState, channel: discord.TextChannel) -> None:
         state.ytdlp_proc = ytdlp_proc
         source = discord.FFmpegPCMAudio(ytdlp_proc.stdout, pipe=True, **FFMPEG_OPTIONS)
         state.voice_client.play(source, after=after_play)
-        await channel.send(f"▶️ 再生中: **{title}**")
+        await channel.send(f"▶️ 再生中: **[{title}]({video_url})**")
 
 
 # ── Bot セットアップ ───────────────────────────────────────────────────────────
@@ -225,7 +225,10 @@ async def cmd_queue(ctx: commands.Context):
 
     lines = []
     if state.current:
-        lines.append(f"▶️ 再生中: **{state.current.get('title', '不明')}**")
+        cur = state.current
+        cur_url = make_video_url(cur) or ""
+        cur_title = cur.get("title") or cur.get("id") or "不明"
+        lines.append(f"▶️ 再生中: **[{cur_title}]({cur_url})**" if cur_url else f"▶️ 再生中: **{cur_title}**")
     if items:
         lines.append(f"\n📋 キュー ({len(items)} 件):")
         for i, entry in enumerate(items[:10], 1):
