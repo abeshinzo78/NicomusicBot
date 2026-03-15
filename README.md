@@ -28,21 +28,21 @@
 ```
 !play <URL>
 ```
-また
-```
-!play <sm00000>　!play <nico.ms> !play <sp.nicovideo>
-```
-などの形式でも流せます。
 
 ニコニコ動画の URL を指定して再生します。
 マイリストやシリーズの URL を指定すると、全曲をまとめてキューに追加します。
 
-**例:**
-```
-!play https://www.nicovideo.jp/watch/sm12345678
-!play https://www.nicovideo.jp/mylist/12345678
-!play https://www.nicovideo.jp/series/12345678
-```
+**対応 URL:**
+
+| 種別 | URL 形式 |
+|---|---|
+| 単体動画 | `https://www.nicovideo.jp/watch/smXXXXXXXX` |
+| マイリスト | `https://www.nicovideo.jp/mylist/XXXXXXXX` |
+| シリーズ | `https://www.nicovideo.jp/series/XXXXXXXX` |
+| 動画 ID のみ | `smXXXXXXXX` |
+| nico.ms 短縮 URL | `nico.ms/smXXXXXXXX` / `https://nico.ms/smXXXXXXXX` |
+| nico.ms マイリスト | `https://nico.ms/mylist/XXXXXXXX` |
+| スマートフォン URL | `https://sp.nicovideo.jp/watch/smXXXXXXXX` |
 
 > ボイスチャンネルに参加した状態で実行してください。
 
@@ -119,14 +119,6 @@
 - **ストリーミング再生** — 音声をディスクに保存せず yt-dlp → FFmpeg へ直接パイプするため、ファイルキャッシュが発生しない
 - **停止時にメモリ解放** — `!stop` および自動退出時に yt-dlp プロセスを強制終了し、`gc.collect()` でガベージコレクションを実行
 - **パッケージの遅延インストール** — 未導入時のみ pip を実行し、再起動のたびに pip が走るコストを排除
-
-### 対応 URL
-
-| 種別 | URL 形式 |
-|---|---|
-| 単体動画 | `https://www.nicovideo.jp/watch/smXXXXXXXX` |
-| マイリスト | `https://www.nicovideo.jp/mylist/XXXXXXXX` |
-| シリーズ | `https://www.nicovideo.jp/series/XXXXXXXX` |
 
 ### エラーハンドリング
 
