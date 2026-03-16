@@ -6,7 +6,7 @@
 
 ## 特徴
 
-- **ニコニコ専用設計** — 単体動画・マイリスト・シリーズのすべての URL に対応
+- **ニコニコ専用設計** — 単体動画・マイリスト・シリーズ・投稿者のすべての URL に対応
 - **低メモリ動作** — 常駐時のメモリ使用量は約 100〜150MB。無料枠でDiscordBotを動かす環境でも安定動作
 - **ストリーミング再生** — 音声をダウンロードせず yt-dlp → FFmpeg へ直接パイプするため、ディスクを使わない
 - **自動パッケージ管理** — 初回起動時に必要なパッケージを自動インストール。`requirements.txt` のアップロードが不要
@@ -40,6 +40,7 @@
 | マイリスト | `https://www.nicovideo.jp/mylist/XXXXXXXX` |
 | シリーズ | `https://www.nicovideo.jp/series/XXXXXXXX` |
 | 動画 ID のみ | `smXXXXXXXX` |
+| 投稿者の動画一覧 | `https://www.nicovideo.jp/user/XXXXXXXX/video` |
 | nico.ms 短縮 URL | `nico.ms/smXXXXXXXX` / `https://nico.ms/smXXXXXXXX` |
 | nico.ms マイリスト | `https://nico.ms/mylist/XXXXXXXX` |
 | スマートフォン URL | `https://sp.nicovideo.jp/watch/smXXXXXXXX` |
