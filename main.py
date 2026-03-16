@@ -190,13 +190,22 @@ async def play_next(state: GuildState, channel: discord.TextChannel) -> None:
             return
 
         entry = await state.queue.get()
-        title = entry.get("title") or entry.get("id") or "不明"
         video_url = make_video_url(entry)
 
         if video_url is None:
+            title = entry.get("title") or entry.get("id") or "不明"
             await safe_send(channel, f"⚠️ `{title}` の URL が取得できませんでした。スキップします。")
             asyncio.ensure_future(play_next(state, channel))
             return
+
+        # タイトルが未取得（flat-playlist でスキップされた場合）なら個別に取得する
+        title = entry.get("title")
+        if not title:
+            meta = await _run_ytdlp_json(["--dump-json", "-q", "--no-playlist", video_url])
+            if meta:
+                title = meta[0].get("title")
+                entry["title"] = title
+        title = title or entry.get("id") or "不明"
 
         log.info("再生開始: %s", title)
         state.current = entry
@@ -242,7 +251,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
 
-bot = commands.Bot(command_prefix="!", intents=intents, max_messages=100)
+_proxy = os.environ.get("DISCORD_PROXY") or None
+bot = commands.Bot(command_prefix="!", intents=intents, max_messages=100, proxy=_proxy)
 
 
 @bot.event
@@ -383,7 +393,7 @@ async def _wait_for_discord_api(token: str) -> None:
     for attempt in range(1, 6):
         try:
             async with aiohttp.ClientSession() as sess:
-                async with sess.get(url, headers=headers, timeout=timeout) as r:
+                async with sess.get(url, headers=headers, timeout=timeout, proxy=_proxy) as r:
                     if r.status != 429:
                         return
             wait = 60 * attempt
