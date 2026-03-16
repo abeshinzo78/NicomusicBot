@@ -1,14 +1,28 @@
 import subprocess
 import sys
 
+
 # ── パッケージ確認・インストール（未導入時のみ）────────────────────────────────
 def _ensure_packages():
     try:
         import discord, nacl, dotenv  # noqa: F401
     except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q",
-            "--break-system-packages", "--no-cache-dir",
-            "discord.py>=2.3.0", "yt-dlp>=2024.1.0", "PyNaCl>=1.5.0", "python-dotenv>=1.0.0"])
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "--break-system-packages",
+                "--no-cache-dir",
+                "discord.py>=2.3.0",
+                "yt-dlp>=2024.1.0",
+                "PyNaCl>=1.5.0",
+                "python-dotenv>=1.0.0",
+            ]
+        )
+
 
 _ensure_packages()
 
@@ -20,6 +34,7 @@ import os
 import time
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import discord
@@ -46,16 +61,20 @@ async def safe_send(target, content: str) -> None:
             return
         except discord.errors.HTTPException as e:
             if e.status == 429 and attempt < 3:
-                wait = 10 * (2 ** attempt)  # 10 → 20 → 40 秒
-                log.warning("送信レート制限。%d 秒後にリトライ (%d/3)", wait, attempt + 1)
+                wait = 10 * (2**attempt)  # 10 → 20 → 40 秒
+                log.warning(
+                    "送信レート制限。%d 秒後にリトライ (%d/3)", wait, attempt + 1
+                )
                 await asyncio.sleep(wait)
             else:
                 log.error("メッセージ送信失敗: %s", e)
                 return
 
+
 # ── 状態管理 ──────────────────────────────────────────────────────────────────
 class GuildState:
     """ギルドごとの再生状態を保持する"""
+
     def __init__(self):
         self.queue: asyncio.Queue[dict] = asyncio.Queue()
         self.current: dict | None = None
@@ -63,6 +82,8 @@ class GuildState:
         self.ytdlp_proc: subprocess.Popen | None = None
         self._play_next_lock = asyncio.Lock()
         self._generation = 0
+        self.volume: float = 1.0  # 0.0〜3.0（デフォルト 100%）
+        self._saved_volume: float | None = None  # ミュート時の音量保存
 
     def kill_ytdlp(self):
         """再生中の yt-dlp プロセスを終了する"""
@@ -90,7 +111,8 @@ def _slim(entry: dict) -> dict:
 async def _run_ytdlp_json(args: list) -> list[dict]:
     """yt-dlp を実行して JSON 出力をパースして返す"""
     proc = await asyncio.create_subprocess_exec(
-        "yt-dlp", *args,
+        "yt-dlp",
+        *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
@@ -108,8 +130,12 @@ async def fetch_entries(url: str) -> list[dict]:
     """yt-dlp subprocess で URL からエントリ一覧を取得する"""
     auth_args = []
     if os.environ.get("NICONICO_USER"):
-        auth_args = ["--username", os.environ["NICONICO_USER"],
-                     "--password", os.environ["NICONICO_PASS"]]
+        auth_args = [
+            "--username",
+            os.environ["NICONICO_USER"],
+            "--password",
+            os.environ["NICONICO_PASS"],
+        ]
 
     base_args = ["--dump-json", "-q", "--ignore-errors", *auth_args]
 
@@ -143,7 +169,7 @@ def normalize_niconico_url(url: str) -> str:
     # nico.ms/sm1234 → 単体動画
     # nico.ms/mylist/1234 → マイリスト
     if url.startswith("nico.ms/"):
-        path = url[len("nico.ms/"):]
+        path = url[len("nico.ms/") :]
         if path.startswith(_VIDEO_ID_PREFIXES):
             return f"https://www.nicovideo.jp/watch/{path}"
         return f"https://www.nicovideo.jp/{path}"
@@ -151,7 +177,7 @@ def normalize_niconico_url(url: str) -> str:
     # sp.nicovideo.jp → www に統一
     url = url.replace("://sp.nicovideo.jp", "://www.nicovideo.jp")
     if url.startswith("sp.nicovideo.jp"):
-        return "https://www." + url[len("sp."):]
+        return "https://www." + url[len("sp.") :]
 
     # スキームなし (nicovideo.jp/... または www.nicovideo.jp/...)
     if not url.startswith("http"):
@@ -194,14 +220,18 @@ async def play_next(state: GuildState, channel: discord.TextChannel) -> None:
 
         if video_url is None:
             title = entry.get("title") or entry.get("id") or "不明"
-            await safe_send(channel, f"⚠️ `{title}` の URL が取得できませんでした。スキップします。")
+            await safe_send(
+                channel, f"⚠️ `{title}` の URL が取得できませんでした。スキップします。"
+            )
             asyncio.ensure_future(play_next(state, channel))
             return
 
         # タイトルが未取得（flat-playlist でスキップされた場合）なら個別に取得する
         title = entry.get("title")
         if not title:
-            meta = await _run_ytdlp_json(["--dump-json", "-q", "--no-playlist", video_url])
+            meta = await _run_ytdlp_json(
+                ["--dump-json", "-q", "--no-playlist", video_url]
+            )
             if meta:
                 title = meta[0].get("title")
                 entry["title"] = title
@@ -222,7 +252,9 @@ async def play_next(state: GuildState, channel: discord.TextChannel) -> None:
             # 3秒未満で終了した場合はストリームエラーとみなして停止
             elapsed = time.monotonic() - started_at
             if elapsed < 3:
-                log.warning("再生が %.1f秒で終了 - ストリームエラーの可能性があります", elapsed)
+                log.warning(
+                    "再生が %.1f秒で終了 - ストリームエラーの可能性があります", elapsed
+                )
                 return
             if err:
                 log.error("再生エラー: %s", err)
@@ -231,18 +263,33 @@ async def play_next(state: GuildState, channel: discord.TextChannel) -> None:
         # yt-dlp をパイプして FFmpeg に直接渡す
         auth_args = []
         if os.environ.get("NICONICO_USER"):
-            auth_args = ["--username", os.environ["NICONICO_USER"],
-                         "--password", os.environ["NICONICO_PASS"]]
+            auth_args = [
+                "--username",
+                os.environ["NICONICO_USER"],
+                "--password",
+                os.environ["NICONICO_PASS"],
+            ]
 
         state.kill_ytdlp()
         ytdlp_proc = subprocess.Popen(
-            ["yt-dlp", "-q", "-f", "bestaudio[abr<=128]/bestaudio",
-             "--no-playlist", "-o", "-", *auth_args, video_url],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            [
+                "yt-dlp",
+                "-q",
+                "-f",
+                "bestaudio[abr<=128]/bestaudio",
+                "--no-playlist",
+                "-o",
+                "-",
+                *auth_args,
+                video_url,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
         state.ytdlp_proc = ytdlp_proc
         source = discord.FFmpegPCMAudio(ytdlp_proc.stdout, pipe=True, **FFMPEG_OPTIONS)
-        state.voice_client.play(source, after=after_play)
+        volume_source = discord.PCMVolumeTransformer(source, state.volume)
+        state.voice_client.play(volume_source, after=after_play)
         await safe_send(channel, f"▶️ 再生中: **[{title}]({video_url})**")
 
 
@@ -279,7 +326,10 @@ async def cmd_play(ctx: commands.Context, url: str):
             except Exception as e:
                 log.warning("VC 接続失敗 (試行 %d/3): %s", attempt, e)
                 if attempt == 3:
-                    await safe_send(ctx, "⚠️ ボイスチャンネルへの接続に失敗しました。もう一度 `!play` を試してください。")
+                    await safe_send(
+                        ctx,
+                        "⚠️ ボイスチャンネルへの接続に失敗しました。もう一度 `!play` を試してください。",
+                    )
                     return
                 await asyncio.sleep(2)
     elif state.voice_client.channel != vc:
@@ -324,7 +374,11 @@ async def cmd_queue(ctx: commands.Context):
         cur = state.current
         cur_url = make_video_url(cur) or ""
         cur_title = cur.get("title") or cur.get("id") or "不明"
-        lines.append(f"▶️ 再生中: **[{cur_title}]({cur_url})**" if cur_url else f"▶️ 再生中: **{cur_title}**")
+        lines.append(
+            f"▶️ 再生中: **[{cur_title}]({cur_url})**"
+            if cur_url
+            else f"▶️ 再生中: **{cur_title}**"
+        )
     if items:
         lines.append(f"\n📋 キュー ({len(items)} 件):")
         for i, entry in enumerate(items[:10], 1):
@@ -358,6 +412,60 @@ async def cmd_stop(ctx: commands.Context):
     await safe_send(ctx, "⏹️ 停止してボイスチャンネルから切断しました。")
 
 
+@bot.command(name="volume")
+async def cmd_volume(ctx: commands.Context, level: int | None = None):
+    """!volume [0-300]  ─ 音量設定・表示"""
+    state = get_state(ctx.guild.id)
+
+    if level is None:
+        percent = int(state.volume * 100)
+        await safe_send(ctx, f"🔊 現在の音量: {percent}%")
+        return
+
+    if not (0 <= level <= 300):
+        await safe_send(ctx, "⚠️ 音量は 0〜300% の範囲で指定してください。")
+        return
+
+    state.volume = level / 100.0
+
+    if state.voice_client and state.voice_client.source:
+        state.voice_client.source.volume = state.volume
+
+    if level == 0:
+        await safe_send(ctx, f"🔇 音量を {level}% に設定しました（ミュート）")
+    else:
+        await safe_send(ctx, f"🔊 音量を {level}% に設定しました")
+
+
+@bot.command(name="mute")
+async def cmd_mute(ctx: commands.Context):
+    """!mute  ─ ミュート/ミュート解除"""
+    state = get_state(ctx.guild.id)
+
+    if state.volume == 0.0:
+        # ミュート解除
+        if state._saved_volume is not None:
+            state.volume = state._saved_volume
+            state._saved_volume = None
+        else:
+            state.volume = 1.0  # デフォルトに戻す
+
+        if state.voice_client and state.voice_client.source:
+            state.voice_client.source.volume = state.volume
+
+        percent = int(state.volume * 100)
+        await safe_send(ctx, f"🔊 ミュートを解除しました（音量: {percent}%）")
+    else:
+        # ミュート
+        state._saved_volume = state.volume
+        state.volume = 0.0
+
+        if state.voice_client and state.voice_client.source:
+            state.voice_client.source.volume = 0.0
+
+        await safe_send(ctx, "🔇 ミュートしました")
+
+
 # ── 自動切断（ボイスチャンネルが空になったとき）──────────────────────────────
 @bot.event
 async def on_voice_state_update(
@@ -387,17 +495,22 @@ async def on_voice_state_update(
 async def _wait_for_discord_api(token: str) -> None:
     """bot.start() を呼ぶ前に Discord API の疎通確認を行い、レート制限中なら待機する"""
     import aiohttp
+
     url = "https://discord.com/api/v10/users/@me"
     headers = {"Authorization": f"Bot {token}"}
     timeout = aiohttp.ClientTimeout(total=10)
     for attempt in range(1, 6):
         try:
             async with aiohttp.ClientSession() as sess:
-                async with sess.get(url, headers=headers, timeout=timeout, proxy=_proxy) as r:
+                async with sess.get(
+                    url, headers=headers, timeout=timeout, proxy=_proxy
+                ) as r:
                     if r.status != 429:
                         return
             wait = 60 * attempt
-            log.warning("レート制限中。%d 秒後に再試行します (試行 %d/5)", wait, attempt)
+            log.warning(
+                "レート制限中。%d 秒後に再試行します (試行 %d/5)", wait, attempt
+            )
             await asyncio.sleep(wait)
         except Exception as e:
             log.warning("API 疎通確認スキップ: %s", e)
@@ -410,6 +523,7 @@ async def main():
         raise RuntimeError(".env ファイルに DISCORD_TOKEN が設定されていません")
     await _wait_for_discord_api(token)
     await bot.start(token)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
