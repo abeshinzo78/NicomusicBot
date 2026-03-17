@@ -431,9 +431,9 @@ Discord API から `429 Too Many Requests` が返された場合、**指数バ�
 
 ```
 niconicomusicBOT/
-├── main.py          フル機能版（KEITO Cloud API 監視・プロキシ対応を含む）
-├──LICENSE           Unlicense license 
-└── README.md        本ドキュメント
+├── main.py         
+├──LICENSE          
+└── README.md       
 ```
 
 
