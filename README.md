@@ -180,7 +180,7 @@ fetch_entries(url)
 
 yt-dlp はニコニコのタグページ（`/tag/...`）をプレイリストとして認識しません。これは yt-dlp のニコニコ対応がマイリスト・シリーズ・ユーザー動画などの「プレイリスト型 URL」に限定されているためです。
 
-そこでタグ検索には **ニコニコデータ村（Niconico Data Village）が提供するスナップショット検索 API v2** を直接使用しています。
+そこでタグ検索には **ニコニコデータ村（Niconico Data Village）が提供する[スナップショット検索 API v2](https://site.nicovideo.jp/search-api-docs/snapshot)** を直接使用しています。
 
 #### API 仕様
 
@@ -415,7 +415,7 @@ Discord API から `429 Too Many Requests` が返された場合、**指数バ�
 
 ## メモリ最適化
 
-このBotは 200MB 制限の KEITO Cloud で安定動作するため、以下の最適化を行っています。
+このBotは 低スペックな機器でも安定動作させるため、以下の最適化を行っています。
 
 | 手法 | 削減効果 | 詳細 |
 |---|---|---|
