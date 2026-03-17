@@ -397,8 +397,10 @@ async def cmd_skip(ctx: commands.Context):
     """!skip  ─ 現在の曲をスキップ"""
     state = get_state(ctx.guild.id)
     if state.voice_client and state.voice_client.is_playing():
+        state._generation += 1  # after_play の古い callback を無効化
         state.voice_client.stop()
         await safe_send(ctx, "⏭️ スキップしました。")
+        await play_next(state, ctx.channel)
     else:
         await safe_send(ctx, "現在再生中の曲はありません。")
 
