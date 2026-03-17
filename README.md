@@ -11,24 +11,13 @@
 
 ## 目次
 
-- [コマンド一覧](#コマンド一覧)
-- [アーキテクチャ概要](#アーキテクチャ概要)
-- [データ取得パイプライン](#データ取得パイプライン)
-  - [yt-dlp による動画・プレイリスト取得](#1-yt-dlp-による動画プレイリスト取得play)
-  - [Snapshot Search API によるタグ検索](#2-niconico-snapshot-search-api-によるタグ検索tag)
-- [音声再生パイプライン](#音声再生パイプライン)
-- [URL 正規化](#url-正規化)
-- [状態管理](#状態管理)
-- [レート制限とリトライ](#レート制限とリトライ)
-- [音量制御](#音量制御)
-- [メモリ最適化](#メモリ最適化)
-- [ファイル構成](#ファイル構成)
-- [セットアップ](#セットアップ)
-- [LICENCE](#LICENSE)
-- [注意事項・制限事項](#注意事項制限事項)
+> **Botの使い方** [コマンド一覧](#コマンド一覧) 
+
+> **内部アーキテクチャ** | [概要](#アーキテクチャ概要) | [データ取得](#データ取得パイプライン) | [音声再生](#音声再生パイプライン) | [URL 正規化](#url-正規化) | [状態管理](#状態管理) | [レート制限](#レート制限とリトライ) | [音量制御](#音量制御) | [メモリ最適化](#メモリ最適化)
+
+> **利用ガイド** | [ファイル構成](#ファイル構成) | [セットアップ](#セットアップ) | [LICENSE](#LICENSE)|[注意事項](#注意事項制限事項)
 
 ---
-
 
 
 ## コマンド一覧
@@ -66,49 +55,65 @@
 
 ---
 
-
 ## アーキテクチャ概要
 
-Bot は大きく2つのパイプラインで構成されます。
+Bot は **データ取得** と **音声再生** の 2 つのパイプラインで構成されます。
+
+### データ取得パイプライン
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                      データ取得パイプライン                                  │
-│                                                                              │
-│  !play URL ──▶ normalize_niconico_url() ──▶ fetch_entries()                  │
-│                  URL の形式差異を吸収          yt-dlp subprocess              │
-│                  www/sp/nico.ms/ID のみ       (1) --flat-playlist で高速取得  │
-│                  → 正規 URL に統一            (2) 空なら通常取得にフォールバック│
-│                                               (3) _slim() で 3 フィールドに圧縮│
-│                                                                              │
-│  !tag タグ名 ──▶ _search_by_tag()                                            │
-│                   Niconico Snapshot Search API v2 (HTTP GET, 認証不要)        │
-│                   タグ名完全一致・投稿日時降順・最大 100 件                    │
-│                                                                              │
-│                          ↓ いずれも                                          │
-│                   asyncio.Queue に dict を enqueue                            │
-│                   dict = { id: "smXXXX", title: "...", url: "..." }          │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                       音声再生パイプライン                                    │
-│                                                                              │
-│  play_next() がキューから 1 件 dequeue                                       │
-│       │                                                                      │
-│       ├─ タイトルが未取得 or 動画 ID 形式 → yt-dlp で個別にメタデータ再取得   │
-│       │                                                                      │
-│       └─ yt-dlp subprocess ── stdout pipe ──▶ FFmpegPCMAudio(pipe=True)      │
-│            -f bestaudio[abr<=128]/bestaudio         │                        │
-│            --no-playlist -o -                        ▼                        │
-│                                                PCMVolumeTransformer          │
-│                                                (ソフトウェア音量 0〜300%)     │
-│                                                      │                      │
-│                                                      ▼                      │
-│                                                Discord VoiceClient           │
-│                                                                              │
-│  再生完了 → after_play() callback → play_next() を再帰呼び出し               │
-└──────────────────────────────────────────────────────────────────────────────┘
+!play <URL>
+ |
+ +--> normalize_niconico_url()    ... URL の形式差異を吸収
+ |      www / sp / nico.ms / ID       (正規 URL に統一)
+ |
+ +--> fetch_entries()             ... yt-dlp subprocess
+        (1) --flat-playlist         で高速取得
+        (2) 空なら通常取得          にフォールバック
+        (3) _slim()                 で 3 フィールドに圧縮
+              |
+              +-------+
+                      |
+!tag <タグ名>          |
+ |                    |
+ +--> _search_by_tag()            ... Snapshot Search API v2
+        HTTP GET / 認証不要           (タグ完全一致, 投稿日時降順, 最大100件)
+              |                   |
+              +-------+-----------+
+                      |
+                      v
+              asyncio.Queue に enqueue
+              dict = { id, title, url }
 ```
+
+### 音声再生パイプライン
+
+```
+play_next()  <-- キューから 1 件 dequeue
+ |
+ +-- タイトルが空 or 動画ID形式(smXXXX)?
+ |    YES --> yt-dlp --dump-json で個別にメタデータ再取得
+ |
+ +-- yt-dlp subprocess
+ |    -f bestaudio[abr<=128]/bestaudio
+ |    --no-playlist -o -
+ |    stdout にバイト列を出力
+ |         |
+ |         | pipe
+ |         v
+ |    FFmpegPCMAudio(pipe=True)    ... 生バイト列を PCM にデコード
+ |         |
+ |         v
+ |    PCMVolumeTransformer         ... ソフトウェア音量 (0~300%)
+ |         |
+ |         v
+ |    Discord VoiceClient          ... VC にリアルタイム送信
+ |
+ +-- 再生完了
+      after_play() callback
+       --> play_next() を再スケジュール (キューが空になるまでループ)
+```
+
 
 ### 使用ライブラリ
 
